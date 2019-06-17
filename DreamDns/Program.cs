@@ -1,6 +1,7 @@
 ﻿using clempaul;
 using clempaul.Dreamhost.ResponseData;
 using System;
+using System.IO;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -44,6 +45,7 @@ namespace DreamDns
             }
             catch(Exception e)
             {
+                WriteError($"Exception thrown: {e.Message}");
                 Console.WriteLine($"Exception thrown: {e.Message}");
                 Environment.Exit(1);
             }
@@ -57,28 +59,34 @@ namespace DreamDns
             string publicIp = await GetPublicIp();
             Console.WriteLine($"Found our public Ip as: {publicIp}");
 
-            // Get all of the current records
+            // Get all of the current records            
             foreach(DNSRecord record in m_api.DNS.ListRecords())
             {
                 // Find all records that match the domain
                 if(record.record.ToLower().Contains(m_domain))
                 {
+                    // Remove all records that we find for this domain.
                     Console.WriteLine($"Found record, {record.Print()}");
-                    await SetIp(record, publicIp);
+                    RemoveRecord(record);
                 }
             }
+
+            // Add the new updated record back.
+            AddRecord(m_domain, publicIp);
+            AddRecord($"www.{m_domain}", publicIp);
         }
 
-        private async Task SetIp(DNSRecord existingRecord, string ip)
+        private void RemoveRecord(DNSRecord existingRecord)
         {
             // First remove the record.
             Console.WriteLine($"Removing record for {existingRecord.Print()}");
             m_api.DNS.RemoveRecord(existingRecord);
+        }
 
-            // Now add it back with the public ip.
-            existingRecord.value = ip;
-            Console.WriteLine($"Adding record for {existingRecord.Print()}");
-            m_api.DNS.AddRecord(existingRecord);
+        private void AddRecord(string domain, string ip)
+        {
+            Console.WriteLine($"Adding A record for {domain} : {ip}");
+            m_api.DNS.AddRecord(domain, "A", ip);
         }
 
         public async Task<string> GetPublicIp()
@@ -87,6 +95,11 @@ namespace DreamDns
             HttpResponseMessage response = await client.GetAsync("https://ifconfig.me/");
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadAsStringAsync();
+        }
+
+        public void WriteError(string err)
+        {
+            File.AppendAllText("Error.txt", $"{err}\r\n");
         }
     }
 
