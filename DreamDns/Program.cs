@@ -59,21 +59,38 @@ namespace DreamDns
             string publicIp = await GetPublicIp();
             Console.WriteLine($"Found our public Ip as: {publicIp}");
 
-            // Get all of the current records            
-            foreach(DNSRecord record in m_api.DNS.ListRecords())
+            // Get all of the current records    
+            var list = m_api.DNS.ListRecords();
+            foreach(DNSRecord record in list)
             {
                 // Find all records that match the domain
-                if(record.record.ToLower().Contains(m_domain))
+                if(record.record.ToLower().Equals(m_domain))
                 {
-                    // Remove all records that we find for this domain.
                     Console.WriteLine($"Found record, {record.Print()}");
-                    RemoveRecord(record);
-                }
-            }
+                    if(!record.value.Equals(publicIp))
+                    {
+                        // If the ip doesn't match remove and re-add it.                        
+                        Console.WriteLine($"The IP doesn't match... updating...");
 
-            // Add the new updated record back.
+                        // Add a delay so we don't get rate limited.
+                        await Task.Delay(1000);
+
+                        RemoveRecord(record);
+
+                        // Add the new updated record back.
+                        AddRecord(m_domain, publicIp);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"The IP matches our public ip, no need to update.");
+                    }
+                    return;
+                }
+            }    
+
+            // Add the record.
+            Console.WriteLine($"The domain {m_domain} wasn't found! Adding...");
             AddRecord(m_domain, publicIp);
-            AddRecord($"www.{m_domain}", publicIp);
         }
 
         private void RemoveRecord(DNSRecord existingRecord)
